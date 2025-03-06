@@ -12,7 +12,13 @@ dist
 dist-ssr
 *.local
 .vite
-
+*.xlsx
+*.xls
+*.doc
+*.docx
+*.pdf
+*.ppt
+*.pptx
 
 
 # Editor directories and files
