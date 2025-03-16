@@ -1,839 +1,1051 @@
 <template>
-  <div class="project-gantt">
+  <div class="team-metrics-analysis">
     <v-card>
       <v-card-title class="d-flex align-center">
-        项目任务甘特图
+        团队度量指标分析
         <v-spacer></v-spacer>
-        <v-btn-toggle
-          v-model="currentView"
-          mandatory
-          @update:model-value="switchView"
-          density="compact"
-          class="mr-4"
-        >
-          <v-btn value="project" size="small">
-            <v-icon>mdi-view-grid</v-icon>
-            项目视图
-          </v-btn>
-          <v-btn value="person" size="small">
-            <v-icon>mdi-account-group</v-icon>
-            人员视图
-          </v-btn>
-        </v-btn-toggle>
       </v-card-title>
       
+      <!-- 文件上传区域 -->
+      <v-card-text>
+        <v-file-input
+          v-model="files"
+          multiple
+          accept=".xlsx"
+          label="上传月度数据文件"
+          prepend-icon="mdi-file-excel"
+          @update:model-value="handleFiles"
+        ></v-file-input>
+      </v-card-text>
+
+      <!-- 饼图区域 -->
+      <v-card-text v-if="metricsData.length > 0">
+        <h3 class="text-subtitle-1 mb-4">敏捷组评估等级分布</h3>
+        <v-row>
+          <v-col v-for="(chartData, index) in monthlyAgileLevelCharts" :key="index" cols="12" md="4">
+            <v-card elevation="2" class="pa-2">
+              <v-card-title class="text-subtitle-2">{{ chartData.month }}</v-card-title>
+              <v-chart class="level-chart" :option="chartData.option" autoresize />
+              <!-- 添加等级分布表格 -->
+              <v-table density="compact" class="mt-2 level-table">
+                <thead>
+                  <tr>
+                    <th>等级</th>
+                    <th>团队数量</th>
+                    <th>占比</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="(item, itemIndex) in chartData.levelData" :key="itemIndex">
+                    <td>
+                      <v-chip
+                        :color="getColorByLevel(item.level)"
+                        size="x-small"
+                        class="text-white"
+                      >{{ item.level }}</v-chip>
+                    </td>
+                    <td class="text-right">{{ item.count }}</td>
+                    <td class="text-right">{{ item.percent }}</td>
+                  </tr>
+                </tbody>
+              </v-table>
+            </v-card>
+          </v-col>
+        </v-row>
+      </v-card-text>
+
       <!-- 筛选条件 -->
       <v-card-text>
         <v-row>
-          <v-col cols="12" md="3">
+          <v-col cols="12" md="6">
             <v-select
-              v-model="selectedProject"
-              :items="availableProjectTypes"
-              label="项目类型"
+              v-model="selectedTeams"
+              :items="teamList"
+              label="选择团队"
               multiple
               chips
               clearable
               density="compact"
-              @update:model-value="filterTasks"
+              @update:model-value="filterData"
             ></v-select>
           </v-col>
-          <v-col cols="12" md="3">
+          <v-col cols="12" md="6">
             <v-select
-              v-model="selectedPerson"
-              :items="personList"
-              label="负责人"
+              v-model="selectedLevelChanges"
+              :items="levelChangeOptions"
+              label="等级变化"
               multiple
               chips
               clearable
               density="compact"
-              @update:model-value="filterTasks"
-            ></v-select>
-          </v-col>
-          <v-col cols="12" md="2">
-            <v-select
-              v-model="selectedProjectName"
-              :items="projectNameList"
-              label="项目"
-              multiple
-              chips
-              clearable
-              density="compact"
-              @update:model-value="filterTasks"
-            ></v-select>
-          </v-col>
-          <v-col cols="12" md="2">
-            <v-select
-              v-model="selectedCustomer"
-              :items="customerList"
-              label="客户"
-              multiple
-              chips
-              clearable
-              density="compact"
-              @update:model-value="filterTasks"
-            ></v-select>
-          </v-col>
-          <v-col cols="12" md="2">
-            <v-select
-              v-model="selectedStatus"
-              :items="statusList"
-              label="状态"
-              multiple
-              chips
-              clearable
-              density="compact"
-              @update:model-value="filterTasks"
+              @update:model-value="filterData"
             ></v-select>
           </v-col>
         </v-row>
       </v-card-text>
 
-      <!-- 甘特图 -->
-      <v-card-text>
-        <div ref="ganttContainer" class="gantt-chart"></div>
+      <!-- 状态变化和警告区域 -->
+      <v-card-text v-if="statusChanges.length > 0 || continuousStatus.length > 0">
+        <v-tabs v-model="activeTab" color="primary">
+          <v-tab value="changes">状态变化</v-tab>
+          <v-tab value="warnings">连续状态警告</v-tab>
+        </v-tabs>
+
+        <v-window v-model="activeTab">
+          <!-- 状态变化表格 -->
+          <v-window-item value="changes">
+            <v-data-table
+              :headers="changeHeaders"
+              :items="statusChanges"
+              density="compact"
+              class="mt-4"
+            >
+              <template v-slot:item.team="{ item }">
+                <a href="#" @click.prevent="selectTeam((item as unknown as TableItem).raw?.team)">
+                  {{ (item as unknown as TableItem).raw?.team || '-' }}
+                </a>
+              </template>
+              <template v-slot:item.metric="{ item }">
+                <span>{{ (item as unknown as TableItem).raw?.metric || '-' }}</span>
+              </template>
+              <template v-slot:item.from="{ item }">
+                <v-chip
+                  v-if="(item as unknown as TableItem).raw && (item as unknown as TableItem).raw.from"
+                  :color="getStatusColor((item as unknown as TableItem).raw.from)"
+                  size="small"
+                >
+                  {{ (item as unknown as TableItem).raw.from }}
+                </v-chip>
+                <span v-else>-</span>
+              </template>
+              <template v-slot:item.to="{ item }">
+                <v-chip
+                  v-if="(item as unknown as TableItem).raw && (item as unknown as TableItem).raw.to"
+                  :color="getStatusColor((item as unknown as TableItem).raw.to)"
+                  size="small"
+                >
+                  {{ (item as unknown as TableItem).raw.to }}
+                </v-chip>
+                <span v-else>-</span>
+              </template>
+              <template v-slot:item.metrics="{ item }">
+                <div v-if="(item as unknown as TableItem).raw && (item as unknown as TableItem).raw.metrics && Array.isArray((item as unknown as TableItem).raw.metrics!) && (item as unknown as TableItem).raw.metrics!.length > 0">
+                  <v-table density="compact" class="metrics-table">
+                    <thead>
+                      <tr>
+                        <th>指标</th>
+                        <th>{{ firstMonthDisplay }}</th>
+                        <th>{{ lastMonthDisplay }}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="(metricChange, index) in (item as unknown as TableItem).raw?.metrics || []" :key="index">
+                        <td>{{ metricChange.metric }}</td>
+                        <td>
+                          <v-chip :color="getStatusColor(metricChange.from)" size="x-small">
+                            {{ metricChange.from }}
+                          </v-chip>
+                        </td>
+                        <td>
+                          <v-chip :color="getStatusColor(metricChange.to)" size="x-small">
+                            {{ metricChange.to }}
+                          </v-chip>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </v-table>
+                </div>
+                <span v-else>-</span>
+              </template>
+              <template v-slot:item.levelChange="{ item }">
+                <v-chip
+                  v-if="(item as unknown as TableItem).raw?.levelChange"
+                  :color="getLevelChangeColor((item as unknown as TableItem).raw?.levelChange || '')"
+                  size="small"
+                >
+                  {{ (item as unknown as TableItem).raw?.levelChange }}
+                </v-chip>
+                <span v-else>-</span>
+              </template>
+            </v-data-table>
+          </v-window-item>
+
+          <!-- 连续状态警告表格 -->
+          <v-window-item value="warnings">
+            <v-data-table
+              :headers="warningHeaders"
+              :items="continuousStatus"
+              density="compact"
+              class="mt-4"
+              :sort-by="[{ key: 'team', order: 'asc' }]"
+            >
+              <template v-slot:item.team="{ item }">
+                <a href="#" @click.prevent="selectTeam(item.team)">
+                  {{ item.team || '-' }}
+                </a>
+              </template>
+              <template v-slot:item.metric="{ item }">
+                <span>{{ item.metric || '-' }}</span>
+              </template>
+              <template v-slot:item.status="{ item }">
+                <v-chip
+                  v-if="item && item.status"
+                  :color="getStatusColor(item.status)"
+                  size="small"
+                >
+                  {{ item.status }}
+                </v-chip>
+                <span v-else>-</span>
+              </template>
+              <template v-slot:item.startMonth="{ item }">
+                <span>{{ item.startMonth || '-' }}</span>
+              </template>
+              <template v-slot:item.endMonth="{ item }">
+                <span>{{ item.endMonth || '-' }}</span>
+              </template>
+              <template v-slot:item.duration="{ item }">
+                <v-chip
+                  v-if="item && item.duration"
+                  :color="getDurationColor(item.duration)"
+                  size="small"
+                >
+                  {{ item.duration }}个月
+                </v-chip>
+                <span v-else>-</span>
+              </template>
+            </v-data-table>
+          </v-window-item>
+        </v-window>
       </v-card-text>
     </v-card>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { ref, computed } from 'vue'
 import { read, utils } from 'xlsx'
 import dayjs from 'dayjs'
 import 'dayjs/locale/zh-cn'
-import 'dhtmlx-gantt/codebase/dhtmlxgantt.css'
-import { gantt } from 'dhtmlx-gantt'
+import VChart from 'vue-echarts'
+import { use } from 'echarts/core'
+import { CanvasRenderer } from 'echarts/renderers'
+import { PieChart } from 'echarts/charts'
+import {
+  GridComponent,
+  TooltipComponent,
+  LegendComponent,
+  TitleComponent
+} from 'echarts/components'
+
+// 注册必要的 ECharts 组件
+use([
+  CanvasRenderer,
+  PieChart,
+  GridComponent,
+  TooltipComponent,
+  LegendComponent,
+  TitleComponent
+])
 
 // 设置 dayjs 使用中文语言包
 dayjs.locale('zh-cn')
 
-interface Task {
-  id: string | number
-  text: string
-  start_date: Date
-  end_date: Date
-  person: string
-  projectType: string
-  progress: number
-  project?: string
-  customer?: string
-  priority?: string
-  stage?: string
-  status?: string
-  workload?: number
-  remainingWork?: number
-  notes?: string
-  parent?: string
-  open?: boolean
+// 定义数据接口
+interface TeamMetrics {
+  teamName: string
+  month: string
+  agileLevel: string // L1, L2, L3
+  metrics: {
+    [key: string]: string // GREEN, YELLOW, RED
+  }
 }
 
-// 不同工作表的数据接口
-interface DeliveryProjectRow {
-  '项目': string
-  '客户': string
-  '优先级': string
-  '项目当前阶段': string
-  '任务事项': string
-  '负责人': string
-  '任务状态': string
-  '工作量（人天）': number
-  '预计开始时间': string
-  '预计完成时间': string
-  '当前进展百分比（进行中必填）': number
-  '备注': string
-  '剩余工作量': number
-}
-
-interface PreSalesProjectRow {
-  '客户': string
-  '提交人': string
-  '售前项目类型': string
-  '待办任务事项': string
-  '负责人': string
-  '工作量（人天）': number
-  '预计开始时间': string
-  '计划完成时间': string
-  '任务状态': string
-}
-
-interface UpcomingProjectRow {
-  '客户': string
-  '提交人': string
-  '即将开始项目类型': string
-  '预估大致规模': string
-  '预计开始时间': string
-}
-
-interface TechnicalProjectRow {
-  '任务/事项': string
-  '负责人': string
-  '工作量（人天）': number
-  '计划完成时间': string
-}
-
-interface CompletedProjectRow {
-  '项目': string
-  '客户': string
-  '项目状态': string
-}
-
-interface GanttTask extends Task {
-  [key: string]: any
+// 定义表格项类型
+interface TableItem {
+  raw: {
+    team: string
+    metric: string
+    from: string
+    to: string
+    month: string
+    status?: string
+    startMonth?: string
+    endMonth?: string
+    duration?: number
+    levelChange?: string
+    metrics?: Array<{
+      metric: string
+      from: string
+      to: string
+    }>
+  }
 }
 
 // 状态定义
-const selectedProject = ref<string[]>([])
-const selectedPerson = ref<string[]>([])
-const selectedProjectName = ref<string[]>([])
-const selectedCustomer = ref<string[]>([])
-const selectedStatus = ref<string[]>([])
-const tasks = ref<Task[]>([])
-const projectTypes = ref<string[]>([])
-const personList = ref<string[]>([])
-const projectNameList = ref<string[]>([])
-const customerList = ref<string[]>([])
-const statusList = ref<string[]>([])
-const ganttContainer = ref<HTMLElement | null>(null)
-const currentView = ref('project')
+const files = ref<File[]>([])
+const teamList = ref<string[]>([])
+const monthList = ref<string[]>([])
+const metricList = ref<string[]>([])
+const selectedTeams = ref<string[]>([])
+const selectedLevelChanges = ref<string[]>([])
+const metricsData = ref<TeamMetrics[]>([])
+const activeTab = ref('changes')
+const statusChanges = ref<Array<{
+  raw: {
+    team: string
+    metric: string
+    from: string
+    to: string
+    month: string
+    levelChange?: string
+    metrics?: Array<{
+      metric: string
+      from: string
+      to: string
+    }>
+  }
+}>>([])
+const continuousStatus = ref<Array<{
+  team: string
+  metric: string
+  status: string
+  startMonth: string
+  endMonth: string
+  duration: number
+}>>([])
 
-// 计算可用的项目类型
-const availableProjectTypes = computed(() => [
-  '在途交付项目',
-  '在途售前项目',
-  '1个月内将来项目',
-  '3个月内必要技术基建'
+// 表格表头月份显示
+const firstMonthDisplay = ref('原状态')
+const lastMonthDisplay = ref('新状态')
+
+// 表格配置
+const changeHeaders = ref([
+  { title: '团队', key: 'team' },
+  { title: '指标', key: 'metric' },
+  { title: '原状态', key: 'from' },
+  { title: '新状态', key: 'to' },
+  { title: '指标变化', key: 'metrics' },
+  { title: '等级变化', key: 'levelChange' }
 ])
 
-// 项目类型颜色映射
-const projectColors: Record<string, string> = {
-  '在途交付项目': '#FF4081',
-  '在途售前项目': '#3F51B5',
-  '1个月内将来项目': '#4CAF50',
-  '3个月内必要技术基建': '#FFA726',
-  '交付项目列表': '#7E57C2'
-}
+const warningHeaders = [
+  { title: '团队', key: 'team', sortable: true },
+  { title: '指标', key: 'metric', sortable: true },
+  { title: '状态', key: 'status' },
+  { title: '开始月份', key: 'startMonth' },
+  { title: '结束月份', key: 'endMonth' },
+  { title: '持续时间', key: 'duration' }
+]
 
-// 日期格式转换函数
-function parseChineseDate(dateStr: string): Date | null {
-  if (!dateStr) return null
+// 等级变化类型
+const levelChangeOptions = ['升级', '降级', '不变']
+
+// 饼图数据
+const monthlyAgileLevelCharts = ref<{
+  month: string,
+  option: any,
+  levelData: any[]
+}[]>([])
+
+// 获取状态颜色
+function getStatusColor(status: string): string {
+  // 处理null或undefined情况
+  if (!status) return 'grey';
   
-  try {
-    // 处理 "2025年1月7日 00:00" 格式
-    if (dateStr.includes('年')) {
-      const match = dateStr.match(/(\d+)年(\d+)月(\d+)日/)
-      if (match) {
-        const [_, year, month, day] = match
-        return new Date(parseInt(year), parseInt(month) - 1, parseInt(day))
-      }
-    }
-    
-    // 处理标准格式（如果有的话）
-    const date = new Date(dateStr)
-    if (!isNaN(date.getTime())) {
-      return date
-    }
-    
-    return null
-  } catch {
-    return null
+  // 检查字符串是否包含特定前缀
+  const statusStr = String(status).trim().toUpperCase();
+  
+  if (statusStr.startsWith('GREEN') || statusStr.includes('L1')) {
+    return 'success'
+  } else if (statusStr.startsWith('YELLOW') || statusStr.includes('L2')) {
+    return 'warning'
+  } else if (statusStr.startsWith('RED') || statusStr.includes('L3')) {
+    return 'error'
+  } else {
+    return 'grey'
   }
 }
 
-// 初始化甘特图
-onMounted(() => {
-  if (ganttContainer.value) {
-    // 基本配置
-    gantt.config.date_format = "%Y-%m-%d"
-    gantt.config.scale_height = 50
-    gantt.config.row_height = 40
-    gantt.config.min_column_width = 40
-    
-    // 禁用拖放功能
-    gantt.config.drag_move = false
-    gantt.config.drag_progress = false
-    gantt.config.drag_resize = false
-    
-    // 配置时间刻度
-    gantt.config.scales = [
-      { unit: "month", step: 1, format: "%Y年%m月" },
-      { unit: "week", step: 1, format: "第%W周" },
-      { unit: "day", step: 1, format: "%d日" }
-    ]
-    
-    // 启用树形结构
-    gantt.config.open_tree_initially = true
-    gantt.config.layout = {
-      css: "gantt_container",
-      rows: [
-        {
-          cols: [
-            {view: "grid", scrollX: "scrollHor", scrollY: "scrollVer"},
-            {resizer: true, width: 1},
-            {view: "timeline", scrollX: "scrollHor", scrollY: "scrollVer"},
-            {view: "scrollbar", id: "scrollVer"}
-          ]
-        },
-        {view: "scrollbar", id: "scrollHor", height: 20}
-      ]
-    }
-    
-    // 配置列
-    gantt.config.columns = [
-      { 
-        name: "text", 
-        label: currentView.value === 'project' ? "任务名称" : "人员/任务", 
-        tree: true, 
-        width: 200,
-        resize: true
-      },
-      { 
-        name: "project", 
-        label: "项目", 
-        align: "center", 
-        width: 120,
-        resize: true
-      },
-      { 
-        name: "customer", 
-        label: "客户", 
-        align: "center", 
-        width: 100,
-        resize: true
-      },
-      { 
-        name: "person", 
-        label: "负责人", 
-        align: "center", 
-        width: 80,
-        resize: true,
-        template: (task: Task) => {
-          return currentView.value === 'person' && !task.parent ? '' : task.person
-        }
-      },
-      { 
-        name: "status", 
-        label: "状态", 
-        align: "center", 
-        width: 80,
-        resize: true
-      },
-      { 
-        name: "workload", 
-        label: "工作量", 
-        align: "center", 
-        width: 80,
-        resize: true,
-        template: (task: Task) => {
-          return task.workload ? task.workload + '人天' : ''
-        }
-      },
-      { 
-        name: "progress", 
-        label: "进度", 
-        align: "center", 
-        width: 60,
-        resize: true,
-        template: (task: Task) => {
-          return task.progress && !task.parent ? Math.round(task.progress * 100) + "%" : ''
-        }
-      }
-    ]
+// 获取持续时间颜色
+function getDurationColor(duration: number): string {
+  if (duration >= 6) return 'error'
+  if (duration >= 4) return 'warning'
+  return 'success'
+}
 
-    // 自定义任务样式
-    gantt.templates.task_class = (_start: Date, _end: Date, task: GanttTask) => {
-      if (task.parent) {
-        return `project-${task.projectType.replace(/[^a-zA-Z]/g, '')}`
-      } else {
-        return 'person-group'
-      }
-    }
-
-    // 自定义提示框
-    gantt.templates.tooltip_text = (start: Date, end: Date, task: Task) => {
-      let tooltip = `<b>任务:</b> ${task.text}<br/>`
-      if (task.project) tooltip += `<b>项目:</b> ${task.project}<br/>`
-      if (task.customer) tooltip += `<b>客户:</b> ${task.customer}<br/>`
-      if (task.priority) tooltip += `<b>优先级:</b> ${task.priority}<br/>`
-      tooltip += `<b>负责人:</b> ${task.person}<br/>`
-      if (task.status) tooltip += `<b>状态:</b> ${task.status}<br/>`
-      tooltip += `<b>开始时间:</b> ${dayjs(start).format('YYYY-MM-DD')}<br/>`
-      tooltip += `<b>结束时间:</b> ${dayjs(end).format('YYYY-MM-DD')}<br/>`
-      if (task.workload) tooltip += `<b>工作量:</b> ${task.workload}人天<br/>`
-      if (task.progress) tooltip += `<b>进度:</b> ${Math.round(task.progress * 100)}%<br/>`
-      if (task.notes) tooltip += `<b>备注:</b> ${task.notes}`
-      return tooltip
-    }
-
-    // 初始化甘特图
-    gantt.init(ganttContainer.value)
+// 获取等级变化颜色
+function getLevelChangeColor(change: string): string {
+  switch (change) {
+    case '升级':
+      return 'success'
+    case '降级':
+      return 'error'
+    case '不变':
+      return 'info'
+    default:
+      return 'grey'
   }
-})
+}
 
-// 清理
-onUnmounted(() => {
-  gantt.destructor()
-})
+// 判断等级变化
+function getLevelChange(from: string, to: string): string {
+  // 确保输入值是字符串
+  const fromStr = String(from || '').trim()
+  const toStr = String(to || '').trim()
+  
+  console.log(`原始等级值: 从 ${fromStr} 到 ${toStr}`)
+  
+  // 从字符串中提取L1、L2、L3部分
+  const fromLevelMatch = fromStr.match(/L(\d)/)
+  const toLevelMatch = toStr.match(/L(\d)/)
+  
+  if (!fromLevelMatch || !toLevelMatch) {
+    console.warn(`无法从 "${fromStr}" 或 "${toStr}" 提取等级数字`)
+    return '不变'
+  }
+  
+  // 获取数字部分
+  const fromLevel = parseInt(fromLevelMatch[1])
+  const toLevel = parseInt(toLevelMatch[1])
+  
+  console.log(`提取的等级数字: 从 L${fromLevel} 到 L${toLevel}`)
+  
+  // 数字越小，等级越高 (L1 > L2 > L3)
+  if (fromLevel > toLevel) {
+    console.log(`结果: 升级 (L${fromLevel} -> L${toLevel})`)
+    return '升级' // 从高数字到低数字表示升级（如从L3到L1是升级）
+  } else if (fromLevel < toLevel) {
+    console.log(`结果: 降级 (L${fromLevel} -> L${toLevel})`)
+    return '降级' // 从低数字到高数字表示降级（如从L1到L3是降级）
+  } else {
+    console.log(`结果: 不变 (L${fromLevel} = L${toLevel})`)
+    return '不变'
+  }
+}
 
-// 文件处理函数
-const handleFile = async (file: File) => {
-  try {
-    const data = await file.arrayBuffer()
-    const workbook = read(data)
+// 自定义过滤函数
+const customFilter = (value: any, search: string, item: any) => {
+  if (search == null || search === '') return true
+  
+  const itemValue = (item.raw && item.raw[value]) ? String(item.raw[value]).toLowerCase() : ''
+  return itemValue.includes(search.toLowerCase())
+}
+
+// 自定义排序函数，处理嵌套对象结构
+const customSort = (items: any[], sortBy: any[], sortDesc: boolean[], locale: string) => {
+  if (!sortBy.length) return items
+  
+  // 创建一个副本，避免修改原始数据
+  const itemsCopy = [...items]
+  
+  // 根据排序参数进行排序
+  return itemsCopy.sort((a, b) => {
+    // 使用第一个排序字段
+    const sortKey = sortBy[0]
+    const sortDirection = sortDesc[0] ? -1 : 1
     
-    const allTasks: Task[] = []
-    const projects = new Set<string>()
-    const persons = new Set<string>()
-    const projectNames = new Set<string>()
-    const customers = new Set<string>()
-    const statuses = new Set<string>()
+    // 从嵌套的raw对象中获取排序值
+    const aValue = a.raw && a.raw[sortKey] ? String(a.raw[sortKey]).toLowerCase() : ''
+    const bValue = b.raw && b.raw[sortKey] ? String(b.raw[sortKey]).toLowerCase() : ''
     
-    // 处理每个工作表
-    workbook.SheetNames.forEach(sheetName => {
-      try {
-        const sheet = workbook.Sheets[sheetName]
-        const jsonData = utils.sheet_to_json(sheet)
-        
-        switch (sheetName) {
-          case '在途交付项目':
-            processDeliveryProjects(jsonData as DeliveryProjectRow[], allTasks, persons, projectNames, customers, statuses, sheetName)
-            projects.add(sheetName)
-            break
-          case '在途售前项目':
-            processPreSalesProjects(jsonData as PreSalesProjectRow[], allTasks, persons, projectNames, customers, statuses, sheetName)
-            projects.add(sheetName)
-            break
-          case '1个月内将来项目':
-            processUpcomingProjects(jsonData as UpcomingProjectRow[], allTasks, persons, projectNames, customers, statuses, sheetName)
-            projects.add(sheetName)
-            break
-          case '3个月内必要技术基建':
-            processTechnicalProjects(jsonData as TechnicalProjectRow[], allTasks, persons, projectNames, customers, statuses, sheetName)
-            projects.add(sheetName)
-            break
-          case '交付项目列表':
-            // 这个sheet可能只需要记录，不需要显示在甘特图上
-            break
+    // 按字母顺序比较
+    if (aValue < bValue) return -1 * sortDirection
+    if (aValue > bValue) return 1 * sortDirection
+    return 0
+  })
+}
+
+// 更新饼图数据
+function updateCharts() {
+  // 获取所有月份
+  const allMonths = [...monthList.value].sort()
+  const chartDataArray: { month: string, option: any, levelData: any[] }[] = []
+  
+  // 定义等级颜色映射
+  const levelColorMap: Record<string, string> = {
+    'L1': '#4caf50',  // 绿色 - 最好的等级
+    'L2': '#ff9800',  // 黄色 - 中等等级
+    'L3': '#f44336',  // 红色 - 最差的等级
+    '数据不全': '#9e9e9e'  // 灰色 - 未知等级
+  }
+  
+  // 为每个月份创建饼图数据
+  allMonths.forEach(month => {
+    // 筛选该月份的数据
+    const monthData = metricsData.value.filter(item => item.month === month)
+    
+    // 统计不同敏捷等级的数量
+    const levelCounts: Record<string, number> = {}
+    let total = 0
+    
+    // 初始化所有等级计数为0，确保所有等级都存在
+    levelCounts['L1'] = 0
+    levelCounts['L2'] = 0
+    levelCounts['L3'] = 0
+    levelCounts['数据不全'] = 0
+    
+    monthData.forEach(data => {
+      // 如果有筛选条件，只统计被选中的团队
+      if (selectedTeams.value.length > 0 && !selectedTeams.value.includes(data.teamName)) {
+        return
+      }
+      
+      // 简化敏捷等级名称，只保留L1、L2、L3部分
+      let simplifiedLevel = '数据不全'
+      const levelMatch = data.agileLevel.match(/L[1-3]/)
+      if (levelMatch) {
+        simplifiedLevel = levelMatch[0]
+      }
+      
+      levelCounts[simplifiedLevel] = (levelCounts[simplifiedLevel] || 0) + 1
+      total++
+    })
+    
+    // 转换为饼图数据格式
+    const pieData = Object.entries(levelCounts).map(([level, count]) => {
+      return {
+        name: level,
+        value: count,
+        percent: total > 0 ? ((count / total) * 100).toFixed(1) + '%' : '0.0%',
+        itemStyle: {
+          color: levelColorMap[level] || levelColorMap['数据不全']
         }
-      } catch (sheetError) {
-        console.error(`处理工作表 ${sheetName} 时出错:`, sheetError)
       }
     })
     
-    if (allTasks.length === 0) {
-      throw new Error('没有找到有效的任务数据')
+    // 准备表格展示数据 - 固定顺序为L1, L2, L3, 数据不全
+    const levelData = [
+      {
+        level: 'L1',
+        count: levelCounts['L1'],
+        percent: total > 0 ? ((levelCounts['L1'] / total) * 100).toFixed(1) + '%' : '0.0%'
+      },
+      {
+        level: 'L2',
+        count: levelCounts['L2'],
+        percent: total > 0 ? ((levelCounts['L2'] / total) * 100).toFixed(1) + '%' : '0.0%'
+      },
+      {
+        level: 'L3',
+        count: levelCounts['L3'],
+        percent: total > 0 ? ((levelCounts['L3'] / total) * 100).toFixed(1) + '%' : '0.0%'
+      },
+      {
+        level: '数据不全',
+        count: levelCounts['数据不全'],
+        percent: total > 0 ? ((levelCounts['数据不全'] / total) * 100).toFixed(1) + '%' : '0.0%'
+      }
+    ];
+    
+    // 创建饼图配置
+    const option = {
+      tooltip: {
+        trigger: 'item',
+        formatter: '{b}: {c} ({d}%)'
+      },
+      legend: {
+        orient: 'horizontal',
+        bottom: 'bottom',
+        type: 'scroll',
+        textStyle: {
+          fontSize: 12
+        }
+      },
+      color: [levelColorMap.L1, levelColorMap.L2, levelColorMap.L3, levelColorMap['数据不全']],
+      series: [
+        {
+          type: 'pie',
+          radius: '60%',  // 改为实心饼图
+          avoidLabelOverlap: true, // 启用标签避免重叠
+          label: {
+            show: true,
+            position: 'inside',
+            formatter: '{b}', // 只显示等级名称
+            fontSize: 14,
+            fontWeight: 'bold'
+          },
+          labelLayout: {  // 添加标签布局选项
+            hideOverlap: true  // 隐藏重叠的标签
+          },
+          emphasis: {
+            label: {
+              show: true,
+              fontSize: '16',
+              fontWeight: 'bold'
+            }
+          },
+          data: pieData
+        }
+      ]
     }
-
-    tasks.value = allTasks
-    projectTypes.value = Array.from(projects)
-    personList.value = Array.from(persons)
-    projectNameList.value = Array.from(projectNames)
-    customerList.value = Array.from(customers)
-    statusList.value = Array.from(statuses)
     
-    // 更新甘特图数据
-    switchView(currentView.value)
+    chartDataArray.push({
+      month,
+      option,
+      levelData
+    })
+  })
+  
+  monthlyAgileLevelCharts.value = chartDataArray
+}
 
-    // 自动调整时间范围
-    const minDate = new Date(Math.min(...allTasks.map(t => t.start_date.getTime())))
-    const maxDate = new Date(Math.max(...allTasks.map(t => t.end_date.getTime())))
+// 根据等级获取颜色
+function getColorByLevel(level: string): string {
+  switch(level) {
+    case 'L1': return 'success';
+    case 'L2': return 'warning';
+    case 'L3': return 'error';
+    default: return 'grey';
+  }
+}
+
+// 处理文件上传
+const handleFiles = async (uploadedFiles: any) => {
+  try {
+    if (!uploadedFiles) return
     
-    gantt.config.start_date = minDate
-    gantt.config.end_date = maxDate
-    gantt.render()
-
+    const newData: TeamMetrics[] = []
+    const files = Array.isArray(uploadedFiles) ? uploadedFiles : [uploadedFiles]
+    
+    for (const file of files) {
+      const data = await file.arrayBuffer()
+      const workbook = read(data)
+      
+      // 从文件名解析月份
+      const month = parseMonthFromFileName(file.name)
+      
+      // 只处理第一个工作表
+      if (workbook.SheetNames.length > 0) {
+        try {
+          const sheetName = workbook.SheetNames[0]
+          const sheet = workbook.Sheets[sheetName]
+          const jsonData = utils.sheet_to_json(sheet)
+          
+          // 处理数据并添加到newData
+          processTeamData(jsonData, month, newData)
+        } catch (sheetError) {
+          console.error(`处理工作表时出错:`, sheetError)
+        }
+      }
+    }
+    
+    // 更新数据
+    metricsData.value = newData
+    
+    // 更新选项列表
+    updateLists(newData)
+    
+    // 更新图表和数据
+    updateCharts()
+    updateData()
+    
   } catch (error) {
     console.error('处理文件时出错:', error)
     alert('处理文件时出错: ' + (error instanceof Error ? error.message : '未知错误'))
   }
 }
 
-// 处理在途交付项目
-function processDeliveryProjects(data: DeliveryProjectRow[], allTasks: Task[], persons: Set<string>, projectNames: Set<string>, customers: Set<string>, statuses: Set<string>, sheetName: string) {
-  data.forEach((row, index) => {
-    try {
-      // 检查必要字段
-      const missingFields = []
-      if (!row['任务事项']) missingFields.push('任务事项')
-      if (!row['负责人']) missingFields.push('负责人')
-      
-      if (missingFields.length > 0) {
-        console.warn(`行数据缺少必要字段 [${missingFields.join(', ')}]: `, row)
-        return
-      }
-
-      // 处理日期
-      let startDate: Date | null = null
-      let endDate: Date | null = null
-      
-      if (row['预计开始时间']) {
-        startDate = parseChineseDate(row['预计开始时间'])
-      }
-      if (row['预计完成时间']) {
-        endDate = parseChineseDate(row['预计完成时间'])
-      }
-      
-      // 如果没有日期信息，使用默认值
-      if (!startDate) {
-        startDate = new Date() // 默认从今天开始
-      }
-      if (!endDate) {
-        endDate = new Date(startDate.getTime() + 7 * 24 * 60 * 60 * 1000) // 默认持续7天
-      }
-
-      const task: Task = {
-        id: `delivery_${index}`,
-        text: row['任务事项'],
-        start_date: startDate,
-        end_date: endDate,
-        person: row['负责人'],
-        projectType: sheetName,
-        progress: row['当前进展百分比（进行中必填）'] ? row['当前进展百分比（进行中必填）'] / 100 : 0,
-        project: row['项目'],
-        customer: row['客户'],
-        priority: row['优先级'],
-        stage: row['项目当前阶段'],
-        status: row['任务状态'],
-        workload: row['工作量（人天）'],
-        remainingWork: row['剩余工作量'],
-        notes: row['备注']
-      }
-      
-      allTasks.push(task)
-      persons.add(row['负责人'])
-      if (row['项目']) projectNames.add(row['项目'])
-      if (row['客户']) customers.add(row['客户'])
-      if (row['任务状态']) statuses.add(row['任务状态'])
-    } catch (rowError) {
-      console.error('处理行数据时出错:', rowError)
-    }
-  })
-}
-
-// 处理在途售前项目
-function processPreSalesProjects(data: PreSalesProjectRow[], allTasks: Task[], persons: Set<string>, projectNames: Set<string>, customers: Set<string>, statuses: Set<string>, sheetName: string) {
-  data.forEach((row, index) => {
-    try {
-      const missingFields = []
-      if (!row['待办任务事项']) missingFields.push('待办任务事项')
-      if (!row['负责人']) missingFields.push('负责人')
-      
-      if (missingFields.length > 0) {
-        console.warn(`行数据缺少必要字段 [${missingFields.join(', ')}]: `, row)
-        return
-      }
-
-      let startDate: Date | null = null
-      let endDate: Date | null = null
-      
-      if (row['预计开始时间']) {
-        startDate = parseChineseDate(row['预计开始时间'])
-      }
-      if (row['计划完成时间']) {
-        endDate = parseChineseDate(row['计划完成时间'])
-      }
-      
-      if (!startDate) {
-        startDate = new Date()
-      }
-      if (!endDate) {
-        endDate = new Date(startDate.getTime() + 7 * 24 * 60 * 60 * 1000)
-      }
-
-      const task: Task = {
-        id: `presales_${index}`,
-        text: row['待办任务事项'],
-        start_date: startDate,
-        end_date: endDate,
-        person: row['负责人'],
-        projectType: sheetName,
-        progress: 0,
-        customer: row['客户'],
-        status: row['任务状态'],
-        workload: row['工作量（人天）']
-      }
-      
-      allTasks.push(task)
-      persons.add(row['负责人'])
-      if (row['客户']) customers.add(row['客户'])
-      if (row['任务状态']) statuses.add(row['任务状态'])
-    } catch (rowError) {
-      console.error('处理行数据时出错:', rowError)
-    }
-  })
-}
-
-// 处理即将开始的项目
-function processUpcomingProjects(data: UpcomingProjectRow[], allTasks: Task[], persons: Set<string>, projectNames: Set<string>, customers: Set<string>, statuses: Set<string>, sheetName: string) {
-  data.forEach((row, index) => {
-    try {
-      const missingFields = []
-      if (!row['即将开始项目类型']) missingFields.push('即将开始项目类型')
-      
-      if (missingFields.length > 0) {
-        console.warn(`行数据缺少必要字段 [${missingFields.join(', ')}]: `, row)
-        return
-      }
-
-      let startDate: Date | null = null
-      
-      if (row['预计开始时间']) {
-        startDate = parseChineseDate(row['预计开始时间'])
-      }
-      
-      if (!startDate) {
-        startDate = new Date()
-      }
-      
-      const endDate = new Date(startDate.getTime() + 30 * 24 * 60 * 60 * 1000)
-
-      const task: Task = {
-        id: `upcoming_${index}`,
-        text: row['即将开始项目类型'],
-        start_date: startDate,
-        end_date: endDate,
-        person: row['提交人'],
-        projectType: sheetName,
-        progress: 0,
-        customer: row['客户']
-      }
-      
-      allTasks.push(task)
-      persons.add(row['提交人'])
-      if (row['客户']) customers.add(row['客户'])
-    } catch (rowError) {
-      console.error('处理行数据时出错:', rowError)
-    }
-  })
-}
-
-// 处理技术基建项目
-function processTechnicalProjects(data: TechnicalProjectRow[], allTasks: Task[], persons: Set<string>, projectNames: Set<string>, customers: Set<string>, statuses: Set<string>, sheetName: string) {
-  data.forEach((row, index) => {
-    try {
-      const missingFields = []
-      if (!row['任务/事项']) missingFields.push('任务/事项')
-      if (!row['负责人']) missingFields.push('负责人')
-      
-      if (missingFields.length > 0) {
-        console.warn(`行数据缺少必要字段 [${missingFields.join(', ')}]: `, row)
-        return
-      }
-
-      let endDate: Date | null = null
-      
-      if (row['计划完成时间']) {
-        endDate = parseChineseDate(row['计划完成时间'])
-      }
-      
-      const startDate = new Date() // 从当前开始
-      if (!endDate) {
-        endDate = new Date(startDate.getTime() + 14 * 24 * 60 * 60 * 1000) // 默认两周
-      }
-
-      const task: Task = {
-        id: `technical_${index}`,
-        text: row['任务/事项'],
-        start_date: startDate,
-        end_date: endDate,
-        person: row['负责人'],
-        projectType: sheetName,
-        progress: 0,
-        workload: row['工作量（人天）']
-      }
-      
-      allTasks.push(task)
-      persons.add(row['负责人'])
-      if (row['任务/事项']) projectNames.add(row['任务/事项'])
-    } catch (rowError) {
-      console.error('处理行数据时出错:', rowError)
-    }
-  })
-}
-
-// 视图切换函数
-function switchView(view: string) {
-  // 重新组织数据结构
-  const filteredTasks = tasks.value.filter(task => {
-    const projectMatch = selectedProject.value.length === 0 || 
-      selectedProject.value.includes(task.projectType)
-    const personMatch = selectedPerson.value.length === 0 || 
-      selectedPerson.value.includes(task.person)
-    const projectNameMatch = selectedProjectName.value.length === 0 || 
-      (task.project && selectedProjectName.value.includes(task.project))
-    const customerMatch = selectedCustomer.value.length === 0 || 
-      (task.customer && selectedCustomer.value.includes(task.customer))
-    const statusMatch = selectedStatus.value.length === 0 || 
-      (task.status && selectedStatus.value.includes(task.status))
-    
-    return projectMatch && personMatch && projectNameMatch && customerMatch && statusMatch
-  })
-
-  if (view === 'person') {
-    // 按人员组织数据
-    const personTasks: Task[] = []
-    const personMap = new Map<string, Task>()
-    
-    // 为每个人创建一个父任务
-    Array.from(personList.value).forEach(person => {
-      const personTask: Task = {
-        id: `person_${person}`,
-        text: person,
-        start_date: new Date(),
-        end_date: new Date(),
-        person: person,
-        projectType: '人员',
-        progress: 0,
-        open: true // 默认展开
-      }
-      personMap.set(person, personTask)
-      personTasks.push(personTask)
-    })
-    
-    // 将任务分配到对应的人员下
-    filteredTasks.forEach(task => {
-      const parentTask = personMap.get(task.person)
-      if (parentTask) {
-        // 更新父任务的时间范围
-        if (task.start_date < parentTask.start_date) {
-          parentTask.start_date = task.start_date
-        }
-        if (task.end_date > parentTask.end_date) {
-          parentTask.end_date = task.end_date
-        }
-        
-        // 添加父任务ID
-        const taskCopy = { ...task } as Task
-        taskCopy.parent = parentTask.id.toString()
-        personTasks.push(taskCopy)
-      }
-    })
-    
-    // 更新甘特图
-    gantt.clearAll()
-    gantt.parse({ data: personTasks })
-  } else {
-    // 项目视图 - 清除所有任务的父任务关系
-    const projectTasks = filteredTasks.map(task => {
-      const taskCopy = { ...task }
-      delete taskCopy.parent
-      return taskCopy
-    })
-    
-    gantt.clearAll()
-    gantt.parse({ data: projectTasks })
+// 从文件名解析月份
+function parseMonthFromFileName(fileName: string): string {
+  const match = fileName.match(/(\d{4})(\d{2})/)
+  if (match) {
+    const [_, year, month] = match
+    return `${year}年${month}月`
   }
+  return '未知月份'
 }
 
-// 过滤任务
-const filterTasks = () => {
-  switchView(currentView.value)
+// 处理团队数据
+function processTeamData(data: any[], month: string, newData: TeamMetrics[]) {
+  data.forEach(row => {
+    // 确保有团队名称
+    if (!row['敏捷组名称']) {
+      console.warn('跳过没有敏捷组名称的行:', row)
+      return
+    }
+    
+    // 标准化敏捷组评估等级
+    let agileLevel = row['敏捷组评估等级'] || '未知'
+    // 移除可能的空格
+    agileLevel = agileLevel.trim()
+    
+    const teamMetrics: TeamMetrics = {
+      teamName: row['敏捷组名称'], // 使用敏捷组名称作为团队名称
+      month: month,
+      agileLevel: agileLevel,
+      metrics: {}
+    }
+    
+    // 处理其他指标
+    Object.keys(row).forEach(key => {
+      if (key !== '敏捷组名称' && key !== '敏捷组评估等级') {
+        teamMetrics.metrics[key] = row[key]
+      }
+    })
+    
+    newData.push(teamMetrics)
+  })
 }
 
-// 暴露文件处理函数供父组件调用
+// 更新选项列表
+function updateLists(data: TeamMetrics[]) {
+  // 更新团队列表
+  teamList.value = [...new Set(data.map(item => item.teamName))]
+  
+  // 更新月份列表
+  monthList.value = [...new Set(data.map(item => item.month))]
+  
+  // 更新指标列表
+  const metrics = new Set<string>()
+  data.forEach(item => {
+    Object.keys(item.metrics).forEach(metric => metrics.add(metric))
+  })
+  metricList.value = Array.from(metrics)
+}
+
+// 分析团队状态变化
+function analyzeTeamStatusChanges() {
+  // 创建一个Map来保存每个团队的变化
+  const teamChanges = new Map<string, {
+    team: string,
+    metrics: Array<{
+      metric: string,
+      from: string,
+      to: string,
+      month: string
+    }>,
+    agileLevel?: {
+      from: string,
+      to: string,
+      month: string,
+      levelChange: string
+    }
+  }>()
+  
+  // 创建最终返回的变化数组
+  const changes: Array<{
+    raw: {
+      team: string
+      metric: string
+      from: string
+      to: string
+      month: string
+      levelChange?: string
+      metrics?: Array<{
+        metric: string
+        from: string
+        to: string
+      }>
+    }
+  }> = []
+  
+  // 获取所有月份并排序
+  const allMonths = [...monthList.value].sort()
+  console.log("所有可用月份:", allMonths)
+  
+  // 如果月份不足，无法分析变化
+  if (allMonths.length < 2) {
+    console.log("月份数量不足，无法分析变化")
+    return []
+  }
+  
+  // 只使用最近两个月进行表头更新
+  const lastTwoMonths = allMonths.slice(-2)
+  const firstMonth = lastTwoMonths[0]
+  const lastMonth = lastTwoMonths[1]
+  
+  console.log(`使用最近两个月进行分析: ${firstMonth} 和 ${lastMonth}`)
+  
+  // 更新表头
+  changeHeaders.value = [
+    { title: '团队', key: 'team' },
+    { title: '指标', key: 'metric' },
+    { title: firstMonth, key: 'from' },
+    { title: lastMonth, key: 'to' },
+    { title: '指标变化', key: 'metrics' },
+    { title: '等级变化', key: 'levelChange' }
+  ]
+  
+  // 更新嵌套表格的表头
+  firstMonthDisplay.value = firstMonth
+  lastMonthDisplay.value = lastMonth
+  
+  // 按团队分组数据
+  const teamData = new Map<string, TeamMetrics[]>()
+  metricsData.value.forEach(item => {
+    // 应用筛选条件
+    if (selectedTeams.value.length > 0 && !selectedTeams.value.includes(item.teamName)) return
+    
+    // 只关注最近两个月的数据
+    if (!lastTwoMonths.includes(item.month)) return
+    
+    if (!teamData.has(item.teamName)) {
+      teamData.set(item.teamName, [])
+    }
+    teamData.get(item.teamName)!.push(item)
+  })
+  
+  console.log(`分析 ${teamData.size} 个团队的状态变化`)
+  
+  // 分析每个团队的变化
+  teamData.forEach((data, team) => {
+    // 如果数据不足两个月，则跳过
+    if (data.length < 2) {
+      console.log(`团队 ${team} 不满足两个月的数据条件，跳过分析`)
+      return
+    }
+    
+    // 按月份排序
+    data.sort((a, b) => a.month.localeCompare(b.month))
+    
+    // 提取最近两个月的数据
+    const teamFirstMonth = data.find(d => d.month === firstMonth)
+    const teamLastMonth = data.find(d => d.month === lastMonth)
+    
+    if (!teamFirstMonth || !teamLastMonth) {
+      console.log(`团队 ${team} 缺少 ${firstMonth} 或 ${lastMonth} 的数据，跳过分析`)
+      return
+    }
+    
+    console.log(`分析团队 ${team} 在 ${firstMonth} 到 ${lastMonth} 之间的变化:`)
+    
+    // 初始化团队变化
+    if (!teamChanges.has(team)) {
+      teamChanges.set(team, {
+        team,
+        metrics: []
+      })
+    }
+    
+    // 分析敏捷组评估等级变化 - 现在无论是否变化都记录
+    const levelChange = teamFirstMonth.agileLevel !== teamLastMonth.agileLevel
+      ? getLevelChange(teamFirstMonth.agileLevel, teamLastMonth.agileLevel)
+      : '不变'
+    
+    console.log(`敏捷等级变化状态: ${team} 从 ${teamFirstMonth.agileLevel} 到 ${teamLastMonth.agileLevel}, 变化类型: ${levelChange}`)
+    
+    // 记录敏捷等级变化（包括不变的情况）
+    teamChanges.get(team)!.agileLevel = {
+      from: teamFirstMonth.agileLevel,
+      to: teamLastMonth.agileLevel,
+      month: teamLastMonth.month,
+      levelChange: levelChange
+    }
+    
+    // 分析其他指标变化
+    if (teamFirstMonth.metrics && teamLastMonth.metrics) {
+      // 获取所有指标
+      const metrics = new Set([
+        ...Object.keys(teamFirstMonth.metrics), 
+        ...Object.keys(teamLastMonth.metrics)
+      ])
+      
+      metrics.forEach(metric => {
+        const fromValue = teamFirstMonth.metrics[metric] || ''
+        const toValue = teamLastMonth.metrics[metric] || ''
+        
+        if (fromValue !== toValue) {
+          teamChanges.get(team)!.metrics.push({
+            metric,
+            from: fromValue,
+            to: toValue,
+            month: teamLastMonth.month
+          })
+          
+          console.log(`指标 ${metric} 变化: 从 ${fromValue} 到 ${toValue}`)
+        }
+      })
+    }
+  })
+  
+  // 将团队变化转换为最终格式
+  teamChanges.forEach(change => {
+    // 添加所有团队的敏捷等级数据（包括不变的）
+    if (change.agileLevel) {
+      // 应用等级变化筛选
+      if (selectedLevelChanges.value.length > 0 && !selectedLevelChanges.value.includes(change.agileLevel.levelChange)) {
+        console.log(`由于筛选条件，跳过团队 ${change.team} 的等级变化记录: ${change.agileLevel.levelChange}`)
+        return
+      }
+      
+      console.log(`添加敏捷等级记录到最终结果: 团队 ${change.team}, 从 ${change.agileLevel.from} 到 ${change.agileLevel.to}, 变化类型: ${change.agileLevel.levelChange}`)
+      
+      changes.push({
+        raw: {
+          team: change.team,
+          metric: '敏捷组评估等级',
+          from: change.agileLevel.from,
+          to: change.agileLevel.to,
+          month: change.agileLevel.month,
+          levelChange: change.agileLevel.levelChange,
+          metrics: change.metrics.map(m => ({
+            metric: m.metric,
+            from: m.from,
+            to: m.to
+          }))
+        }
+      })
+    }
+  })
+  
+  console.log(`共检测到 ${changes.length} 个团队记录将显示在表格中`)
+  
+  // 对变化进行排序，按照团队名称排序
+  changes.sort((a, b) => a.raw.team.localeCompare(b.raw.team))
+  
+  return changes
+}
+
+// 检测连续指标状态
+function detectContinuousStatus(months: number = 3) {  // 改为默认值3个月
+  const continuousStatus: Array<{
+    team: string
+    metric: string
+    status: string
+    startMonth: string
+    endMonth: string
+    duration: number
+  }> = []
+  
+  // 按团队分组数据
+  const teamData = new Map<string, TeamMetrics[]>()
+  metricsData.value.forEach(item => {
+    // 应用筛选条件
+    if (selectedTeams.value.length > 0 && !selectedTeams.value.includes(item.teamName)) return
+    
+    if (!teamData.has(item.teamName)) {
+      teamData.set(item.teamName, [])
+    }
+    teamData.get(item.teamName)!.push(item)
+  })
+  
+  // 分析每个团队的连续状态
+  teamData.forEach((data, team) => {
+    // 如果数据为空，跳过
+    if (data.length < months) return // 至少需要3个数据点
+    
+    // 按月份排序
+    data.sort((a, b) => a.month.localeCompare(b.month))
+    
+    // 分析评估等级连续状态
+    let currentStatus = data[0].agileLevel
+    let startMonth = data[0].month
+    let duration = 1
+    
+    for (let i = 1; i < data.length; i++) {
+      if (data[i].agileLevel === currentStatus) {
+        duration++
+        if (duration >= months) {
+          // 只有当状态是L3时才添加到连续告警
+          const isL3 = currentStatus.toUpperCase().includes('L3')
+          
+          if (isL3) {
+            continuousStatus.push({
+              team,
+              metric: '敏捷组评估等级',
+              status: currentStatus,
+              startMonth,
+              endMonth: data[i].month,
+              duration
+            })
+          }
+        }
+      } else {
+        currentStatus = data[i].agileLevel
+        startMonth = data[i].month
+        duration = 1
+      }
+    }
+    
+    // 确保有数据并且有指标
+    if (data.length > 0 && data[0] && data[0].metrics) {
+      // 分析其他指标连续状态
+      const metrics = Object.keys(data[0].metrics)
+      metrics.forEach(metric => {
+        // 不再使用指标筛选条件
+        currentStatus = data[0].metrics[metric]
+        startMonth = data[0].month
+        duration = 1
+        
+        for (let i = 1; i < data.length; i++) {
+          if (data[i].metrics[metric] === currentStatus) {
+            duration++
+            if (duration >= months) {
+              // 只有当状态是RED时才添加到连续告警
+              const isRed = currentStatus.toUpperCase().includes('RED')
+              
+              if (isRed) {
+                continuousStatus.push({
+                  team,
+                  metric,
+                  status: currentStatus,
+                  startMonth,
+                  endMonth: data[i].month,
+                  duration
+                })
+              }
+            }
+          } else {
+            currentStatus = data[i].metrics[metric]
+            startMonth = data[i].month
+            duration = 1
+          }
+        }
+      })
+    }
+  })
+  
+  return continuousStatus
+}
+
+// 更新数据
+function updateData() {
+  // 直接更新状态变化和连续状态的数据
+  statusChanges.value = analyzeTeamStatusChanges()
+  continuousStatus.value = detectContinuousStatus()
+}
+
+// 过滤数据
+function filterData() {
+  updateData()
+  updateCharts() // 更新饼图以反映筛选条件
+}
+
+// 点击团队名称链接时的处理函数
+function selectTeam(team: string | undefined) {
+  if (!team) return
+  
+  // 设置选中的团队
+  selectedTeams.value = [team]
+  
+  // 清空等级变化筛选
+  selectedLevelChanges.value = []
+  
+  // 更新图表
+  filterData()
+  
+  // 滚动到顶部筛选区域
+  setTimeout(() => {
+    window.scrollTo({
+      top: 0,
+      behavior: 'smooth'
+    })
+  }, 100)
+}
+
+// 暴露方法供父组件调用
 defineExpose({
-  handleFile
+  handleFiles,
+  getColorByLevel
 })
 </script>
 
 <style>
-.project-gantt {
+.team-metrics-analysis {
   width: 100%;
   height: 100%;
   min-height: 600px;
   padding: 20px;
-}
-
-.gantt-chart {
-  height: 500px;
-  width: 100%;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-/* 项目类型样式 */
-.project-zaitoujiaofu .gantt_task_progress {
-  background-color: #FF4081;
-}
-
-.project-zaitoushouqian .gantt_task_progress {
-  background-color: #3F51B5;
-}
-
-.project-yigeyueneijianglaixixiang .gantt_task_progress {
-  background-color: #4CAF50;
-}
-
-.project-sangeyueneibiyaojishujichu .gantt_task_progress {
-  background-color: #FFA726;
-}
-
-.project-jiaofuxiangmuliebiao .gantt_task_progress {
-  background-color: #7E57C2;
-}
-
-/* 甘特图主题定制 */
-.gantt_task_line {
-  border-radius: 24px;
-  height: 24px !important;
-  margin-top: 8px;
-}
-
-.gantt_task_progress {
-  border-radius: 24px;
-}
-
-.gantt_grid_head_cell {
-  font-weight: bold;
-  color: #333;
-}
-
-.gantt_grid_data {
-  font-size: 14px;
-}
-
-.gantt_task_content {
-  font-size: 12px;
-  color: white;
-}
-
-/* 工具提示样式 */
-.gantt_tooltip {
-  font-size: 14px;
-  line-height: 1.5;
-  background: rgba(255, 255, 255, 0.95);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  border-radius: 4px;
-  padding: 12px;
-}
-
-/* 人员组样式 */
-.person-group .gantt_task_progress {
-  background-color: #78909C;
-}
-
-.person-group.gantt_task_line {
-  background-color: #ECEFF1;
-  border-color: #B0BEC5;
-}
-
-/* 调整树形结构样式 */
-.gantt_tree_icon {
-  margin-right: 5px;
-}
-
-.gantt_tree_indent {
-  width: 20px;
-}
-
-.gantt_grid_data .gantt_cell {
-  padding-left: 6px;
-  padding-right: 6px;
-}
-
-/* 视图切换按钮样式 */
-.v-btn-toggle {
-  margin-right: 16px;
 }
 
 /* 调整按钮和选择器大小 */
@@ -848,5 +1060,51 @@ defineExpose({
 
 .v-select .v-chip {
   margin: 2px;
+}
+
+/* 表格样式 */
+.v-data-table {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.v-data-table .v-data-table-header {
+  background-color: #f5f5f5;
+}
+
+.v-data-table .v-data-table-footer {
+  background-color: #f5f5f5;
+}
+
+/* 指标变化表格样式 */
+.metrics-table {
+  border: 1px solid #eee;
+  border-radius: 4px;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+}
+
+.metrics-table th {
+  background-color: #f5f5f5;
+  font-size: 0.8rem;
+  padding: 2px 4px !important;
+  text-align: center;
+  border-bottom: 1px solid #eee;
+}
+
+.metrics-table td {
+  font-size: 0.8rem;
+  padding: 2px 4px !important;
+  text-align: center;
+  vertical-align: middle;
+}
+
+/* 饼图样式 */
+.level-chart {
+  height: 300px;
+  width: 100%;
 }
 </style> 
