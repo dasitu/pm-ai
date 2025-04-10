@@ -229,30 +229,42 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import VChart from 'vue-echarts'
-import { use } from 'echarts/core'
-import { CanvasRenderer } from 'echarts/renderers'
-import { PieChart } from 'echarts/charts'
-import {
-  GridComponent,
-  TooltipComponent,
-  LegendComponent,
-  TitleComponent
-} from 'echarts/components'
-import type { TableItem } from '@/types'
+import type { TeamMetrics, TableItem, ContinuousStatus } from '@/types'
 import { useTeamMetrics } from '@/composables/useTeamMetrics'
 import { useStatusAnalysis } from '@/composables/useStatusAnalysis'
 import { useCharts } from '@/composables/useCharts'
+import VChart from 'vue-echarts'
 
-// 注册必要的 ECharts 组件
-use([
-  CanvasRenderer,
-  PieChart,
-  GridComponent,
-  TooltipComponent,
-  LegendComponent,
-  TitleComponent
-])
+const files = ref<File[]>([])
+const teamList = ref<string[]>([])
+const monthList = ref<string[]>([])
+const selectedTeams = ref<string[]>([])
+const selectedLevelChanges = ref<string[]>([])
+const metricsData = ref<TeamMetrics[]>([])
+const activeTab = ref('changes')
+const statusChanges = ref<TableItem[]>([])
+const continuousStatus = ref<ContinuousStatus[]>([])
+const firstMonthDisplay = ref('')
+const lastMonthDisplay = ref('')
+
+const {
+  statsData,
+  isLoading,
+  errorMessage,
+  showError,
+  readExcelFile
+} = useTeamMetrics()
+
+const {
+  getStatusColor,
+  updateData
+} = useStatusAnalysis(metricsData, monthList, selectedTeams, selectedLevelChanges, statsData.value)
+
+const {
+  monthlyAgileLevelCharts,
+  updateCharts,
+  getColorByLevel
+} = useCharts(metricsData, monthList, selectedTeams)
 
 // 等级变化类型
 const levelChangeOptions = ['升级', '降级', '不变']
@@ -276,50 +288,6 @@ const warningHeaders = [
   { title: '持续时间', key: 'duration' }
 ]
 
-const activeTab = ref('changes')
-
-// 使用 composables
-const {
-  files,
-  teamList,
-  monthList,
-  selectedTeams,
-  selectedLevelChanges,
-  metricsData,
-  handleFiles
-} = useTeamMetrics()
-
-const {
-  statusChanges,
-  continuousStatus,
-  firstMonthDisplay,
-  lastMonthDisplay,
-  updateData
-} = useStatusAnalysis(metricsData, monthList, selectedTeams, selectedLevelChanges)
-
-const {
-  monthlyAgileLevelCharts,
-  updateCharts,
-  getColorByLevel
-} = useCharts(metricsData, monthList, selectedTeams)
-
-// 获取状态颜色
-function getStatusColor(status: string): string {
-  if (!status) return 'grey'
-  
-  const statusStr = String(status).trim().toUpperCase()
-  
-  if (statusStr.startsWith('GREEN') || statusStr.includes('L1')) {
-    return 'success'
-  } else if (statusStr.startsWith('YELLOW') || statusStr.includes('L2')) {
-    return 'warning'
-  } else if (statusStr.startsWith('RED') || statusStr.includes('L3')) {
-    return 'error'
-  } else {
-    return 'grey'
-  }
-}
-
 // 获取持续时间颜色
 function getDurationColor(duration: number): string {
   if (duration >= 6) return 'error'
@@ -334,53 +302,46 @@ function getLevelChangeColor(change: string): string {
       return 'success'
     case '降级':
       return 'error'
-    case '不变':
-      return 'info'
     default:
       return 'grey'
   }
 }
 
 // 处理文件上传
-async function handleFileUpload(files: File | File[]) {
+const handleFileUpload = async (files: File | File[]) => {
   try {
+    isLoading.value = true
     const fileArray = Array.isArray(files) ? files : [files]
     if (fileArray.length === 0) return
-    
-    await handleFiles(fileArray)
+
+    for (const file of fileArray) {
+      await readExcelFile(file)
+    }
     updateCharts()
     updateData()
   } catch (error) {
     console.error('处理文件时出错:', error)
-    alert('处理文件时出错: ' + (error instanceof Error ? error.message : '未知错误'))
+    showError.value = true
+    errorMessage.value = error instanceof Error ? error.message : '处理文件时出错'
+  } finally {
+    isLoading.value = false
   }
 }
 
 // 过滤数据
 function filterData() {
-  updateData()
   updateCharts()
+  updateData()
 }
 
-// 点击团队名称链接时的处理函数
-function selectTeam(team: string | undefined) {
-  if (!team) return
-  
+// 选择团队
+function selectTeam(team: string) {
   selectedTeams.value = [team]
-  selectedLevelChanges.value = []
   filterData()
-  
-  setTimeout(() => {
-    window.scrollTo({
-      top: 0,
-      behavior: 'smooth'
-    })
-  }, 100)
 }
 
 // 暴露方法供父组件调用
 defineExpose({
-  handleFiles,
   getColorByLevel
 })
 </script>

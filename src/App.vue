@@ -16,14 +16,26 @@
               >
                 <v-tab value="team-metrics">团队度量指标分析</v-tab>
                 <v-tab value="maturity-score">成熟度评估分数分布</v-tab>
+                <v-tab value="requirement-island">需求岛治理数据统计</v-tab>
+                <v-tab value="product-pool">产品需求池治理数据统计</v-tab>
+                <v-tab value="agile-team">敏捷组规范度对比统计</v-tab>
               </v-tabs>
 
               <v-window v-model="activeTab">
                 <v-window-item value="team-metrics">
-                  <project-gantt ref="ganttChart" />
+                  <team-metrics ref="teamMetricsChart" />
                 </v-window-item>
                 <v-window-item value="maturity-score">
                   <maturity-score-distribution ref="maturityScoreChart" />
+                </v-window-item>
+                <v-window-item value="requirement-island">
+                  <requirement-island-stats ref="requirementIslandStats" />
+                </v-window-item>
+                <v-window-item value="product-pool">
+                  <product-pool-stats ref="productPoolStats" />
+                </v-window-item>
+                <v-window-item value="agile-team">
+                  <agile-team-stats ref="agileTeamStats" />
                 </v-window-item>
               </v-window>
             </v-card>
@@ -36,12 +48,18 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import ProjectGantt from './components/ProjectGantt.vue'
+import TeamMetrics from './components/TeamMetrics.vue'
 import MaturityScoreDistribution from './components/MaturityScoreDistribution.vue'
+import RequirementIslandStats from './components/RequirementIslandStats.vue'
+import ProductPoolStats from './components/ProductPoolStats.vue'
+import AgileTeamStats from './components/AgileTeamStats.vue'
 
 const activeTab = ref('team-metrics')
-const ganttChart = ref<InstanceType<typeof ProjectGantt> | null>(null)
+const teamMetricsChart = ref<InstanceType<typeof TeamMetrics> | null>(null)
 const maturityScoreChart = ref<InstanceType<typeof MaturityScoreDistribution> | null>(null)
+const requirementIslandStats = ref<InstanceType<typeof RequirementIslandStats> | null>(null)
+const productPoolStats = ref<InstanceType<typeof ProductPoolStats> | null>(null)
+const agileTeamStats = ref<InstanceType<typeof AgileTeamStats> | null>(null)
 </script>
 
 <style scoped>

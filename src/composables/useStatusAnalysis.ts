@@ -1,16 +1,78 @@
 import { ref, type Ref } from 'vue'
 import type { TeamMetrics, TableItem, ContinuousStatus } from '@/types'
+import { computed } from 'vue'
+import type { TeamMetricsData, StatusCounts } from '@/types'
 
 export function useStatusAnalysis(
   metricsData: Ref<TeamMetrics[]>,
   monthList: Ref<string[]>,
   selectedTeams: Ref<string[]>,
-  selectedLevelChanges: Ref<string[]>
+  selectedLevelChanges: Ref<string[]>,
+  statsData: { [period: string]: TeamMetricsData[] }
 ) {
   const statusChanges = ref<TableItem[]>([])
   const continuousStatus = ref<ContinuousStatus[]>([])
   const firstMonthDisplay = ref('原状态')
   const lastMonthDisplay = ref('新状态')
+
+  const statusColors = {
+    '良好规范': '#91cc75',
+    '较为规范': '#fac858',
+    '不太规范': '#ee6666',
+    '有待健全': '#73c0de'
+  }
+
+  const getStatusColor = (status: string) => {
+    return statusColors[status as keyof typeof statusColors] || '#909399'
+  }
+
+  const getStatusCount = (status: string, metric: string, period: string): number => {
+    const periodData = statsData[period]
+    if (!periodData) return 0
+
+    const statusCounts: StatusCounts = {
+      '良好规范': 0,
+      '较为规范': 0,
+      '不太规范': 0,
+      '有待健全': 0
+    }
+
+    periodData.forEach(item => {
+      const itemStatus = item.metrics[metric]?.最终状态
+      if (itemStatus && itemStatus in statusCounts) {
+        statusCounts[itemStatus]++
+      }
+    })
+
+    return statusCounts[status as keyof StatusCounts] || 0
+  }
+
+  const hasStatusChanged = (status: string, metric: string) => {
+    const periods = Object.keys(statsData).sort()
+    if (periods.length < 2) return false
+
+    const prevCount = getStatusCount(status, metric, periods[0])
+    const currCount = getStatusCount(status, metric, periods[1])
+    return prevCount !== currCount
+  }
+
+  const hasStatusIncreased = (status: string, metric: string) => {
+    const periods = Object.keys(statsData).sort()
+    if (periods.length < 2) return false
+
+    const prevCount = getStatusCount(status, metric, periods[0])
+    const currCount = getStatusCount(status, metric, periods[1])
+    return currCount > prevCount
+  }
+
+  const hasStatusDecreased = (status: string, metric: string) => {
+    const periods = Object.keys(statsData).sort()
+    if (periods.length < 2) return false
+
+    const prevCount = getStatusCount(status, metric, periods[0])
+    const currCount = getStatusCount(status, metric, periods[1])
+    return currCount < prevCount
+  }
 
   // 判断等级变化
   function getLevelChange(from: string, to: string): string {
@@ -251,6 +313,12 @@ export function useStatusAnalysis(
     firstMonthDisplay,
     lastMonthDisplay,
     updateData,
-    getLevelChange
+    getLevelChange,
+    getStatusColor,
+    getStatusCount,
+    hasStatusChanged,
+    hasStatusIncreased,
+    hasStatusDecreased,
+    statusColors
   }
 } 
