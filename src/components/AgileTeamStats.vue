@@ -2,7 +2,7 @@
   <div class="agile-team-stats">
     <v-card>
       <v-card-title class="d-flex align-center">
-        敏捷组规范度统计
+        敏捷走查结果统计
         <v-spacer></v-spacer>
       </v-card-title>
       
@@ -12,7 +12,7 @@
           v-model="files"
           multiple
           accept=".xlsx"
-          label="上传敏捷组规范度数据文件（支持上传两个时期进行对比）"
+          label="上传敏捷走查结果数据文件（支持上传两个时期进行对比）"
           prepend-icon="mdi-file-excel"
           @update:model-value="handleFileUpload"
           hide-details

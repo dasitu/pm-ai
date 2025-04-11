@@ -1,8 +1,5 @@
 import { ref, type Ref } from 'vue'
 import type { TeamMetrics } from '@/types'
-import { onMounted, onUnmounted, nextTick } from 'vue'
-import * as echarts from 'echarts'
-import type { ChartData } from '@/types'
 
 export function useCharts(
   metricsData: Ref<TeamMetrics[]>,
@@ -14,8 +11,6 @@ export function useCharts(
     option: any,
     levelData: any[]
   }[]>([])
-
-  let charts: echarts.ECharts[] = []
 
   // 定义等级颜色映射
   const levelColorMap: Record<string, string> = {
@@ -152,88 +147,9 @@ export function useCharts(
     }
   }
 
-  const initCharts = () => {
-    // 销毁现有图表
-    charts.forEach(chart => {
-      chart.dispose()
-    })
-    charts = []
-  }
-
-  const createPieChart = (chart: echarts.ECharts, data: ChartData[], title: string) => {
-    const option = {
-      title: {
-        text: title,
-        left: 'center',
-        top: 0,
-        textStyle: {
-          fontSize: 14
-        }
-      },
-      tooltip: {
-        trigger: 'item',
-        formatter: '{b}: {c} ({d}%)'
-      },
-      legend: {
-        orient: 'vertical',
-        left: 'left',
-        top: 'middle'
-      },
-      series: [
-        {
-          name: title,
-          type: 'pie',
-          radius: '50%',
-          center: ['60%', '50%'],
-          data,
-          emphasis: {
-            itemStyle: {
-              shadowBlur: 10,
-              shadowOffsetX: 0,
-              shadowColor: 'rgba(0, 0, 0, 0.5)'
-            }
-          },
-          label: {
-            show: true,
-            formatter: '{b}: {c}'
-          }
-        }
-      ],
-      color: [
-        '#91cc75', // 良好规范
-        '#fac858', // 较为规范
-        '#ee6666', // 不太规范
-        '#73c0de'  // 有待健全
-      ]
-    }
-
-    chart.setOption(option)
-  }
-
-  const handleResize = () => {
-    charts.forEach(chart => {
-      chart.resize()
-    })
-  }
-
-  onMounted(() => {
-    window.addEventListener('resize', handleResize)
-  })
-
-  onUnmounted(() => {
-    window.removeEventListener('resize', handleResize)
-    charts.forEach(chart => {
-      chart.dispose()
-    })
-  })
-
   return {
     monthlyAgileLevelCharts,
     updateCharts,
-    getColorByLevel,
-    charts,
-    initCharts,
-    createPieChart,
-    handleResize
+    getColorByLevel
   }
 } 
