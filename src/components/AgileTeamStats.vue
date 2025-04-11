@@ -77,24 +77,15 @@
 
         <!-- 规范度状态汇总统计 -->
         <v-card elevation="2" class="mb-6">
-          <v-card-title>规范度状态汇总统计</v-card-title>
+          <v-card-title>规范度状态汇总统计（{{ periods[periods.length - 1] }}）</v-card-title>
           <v-card-text>
             <v-table density="compact">
               <thead>
                 <tr>
                   <th rowspan="2" style="vertical-align: middle; min-width: 90px">状态</th>
-                  <template v-for="metric in metrics" :key="metric">
-                    <th :colspan="2" class="text-center" :style="{ 'min-width': '80px', 'max-width': '120px' }">
-                      {{ metric }}
-                    </th>
-                  </template>
-                </tr>
-                <tr>
-                  <template v-for="metric in metrics" :key="metric">
-                    <th v-for="period in periods" :key="`${metric}-${period}`" class="text-center" style="padding: 8px 4px">
-                      {{ period.slice(-2) }}
-                    </th>
-                  </template>
+                  <th v-for="metric in metrics" :key="metric" class="text-center" :style="{ 'min-width': '80px', 'max-width': '120px' }">
+                    {{ metric }}
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -104,21 +95,14 @@
                       {{ status }}
                     </v-chip>
                   </td>
-                  <template v-for="metric in metrics" :key="metric">
-                    <td
-                      v-for="period in periods"
-                      :key="`${metric}-${period}`"
-                      class="text-center"
-                      :class="{
-                        'highlight': hasStatusChanged(status, metric),
-                        'increased': hasStatusIncreased(status, metric),
-                        'decreased': hasStatusDecreased(status, metric)
-                      }"
-                      style="padding: 8px 4px"
-                    >
-                      {{ getStatusCount(status, metric, period) }}
-                    </td>
-                  </template>
+                  <td
+                    v-for="metric in metrics"
+                    :key="metric"
+                    class="text-center"
+                    style="padding: 8px 4px"
+                  >
+                    {{ getStatusCount(status, metric, periods[periods.length - 1]) }}
+                  </td>
                 </tr>
               </tbody>
             </v-table>

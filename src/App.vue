@@ -18,7 +18,8 @@
                 <v-tab value="maturity-score">成熟度评估分数分布</v-tab>
                 <v-tab value="requirement-island">需求岛治理数据统计</v-tab>
                 <v-tab value="product-pool">产品需求池治理数据统计</v-tab>
-                <v-tab value="agile-team">敏捷组规范度对比统计</v-tab>
+                <v-tab value="agile-team">敏捷走查结果对比统计</v-tab>
+                <v-tab value="documentation">功能说明文档</v-tab>
               </v-tabs>
 
               <v-window v-model="activeTab">
@@ -37,6 +38,9 @@
                 <v-window-item value="agile-team">
                   <agile-team-stats ref="agileTeamStats" />
                 </v-window-item>
+                <v-window-item value="documentation">
+                  <documentation />
+                </v-window-item>
               </v-window>
             </v-card>
           </v-col>
@@ -53,6 +57,7 @@ import MaturityScoreDistribution from './components/MaturityScoreDistribution.vu
 import RequirementIslandStats from './components/RequirementIslandStats.vue'
 import ProductPoolStats from './components/ProductPoolStats.vue'
 import AgileTeamStats from './components/AgileTeamStats.vue'
+import Documentation from './components/Documentation.vue'
 
 const activeTab = ref('team-metrics')
 const teamMetricsChart = ref<InstanceType<typeof TeamMetrics> | null>(null)
