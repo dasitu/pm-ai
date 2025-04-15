@@ -322,6 +322,57 @@ const readExcelFile = (file: File) => {
         const firstSheetName = workbook.SheetNames[0]
         const worksheet = workbook.Sheets[firstSheetName]
         const jsonData = XLSX.utils.sheet_to_json(worksheet)
+
+        // 验证必需字段是否存在
+        const requiredFields = [
+          '需求收集标题',
+          '业务优先级',
+          '产品优先级',
+          '投递产品线路径',
+          '入池产品线路径',
+          '提报人',
+          '提报部门',
+          '提报时间',
+          '流程节点',
+          '已入池收集周期（天）'
+        ]
+
+        const optionalFields = [
+          '当前处理人',
+          '未入池停留时长（天）'
+        ]
+
+        const firstRow = jsonData[0] || {}
+        const missingRequiredFields = requiredFields.filter(field => !Object.prototype.hasOwnProperty.call(firstRow, field))
+        
+        if (missingRequiredFields.length > 0) {
+          console.error('缺少必需字段:', missingRequiredFields)
+          throw new Error(`文件缺少必需字段: ${missingRequiredFields.join(', ')}`)
+        }
+
+        // 检查可选字段是否存在，如果不存在则添加空值
+        optionalFields.forEach(field => {
+          if (!Object.prototype.hasOwnProperty.call(firstRow, field)) {
+            jsonData.forEach((row: unknown) => {
+              if (row && typeof row === 'object') {
+                (row as Record<string, any>)[field] = ''
+              }
+            })
+          }
+        })
+
+        // 添加更详细的日志输出
+        console.log('Excel文件解析结果:', {
+          文件名: file.name,
+          表头: Object.keys(jsonData[0] || {}),
+          前3行数据: jsonData.slice(0, 3),
+          可选字段处理: optionalFields.map(field => ({
+            字段名: field,
+            是否存在: Object.prototype.hasOwnProperty.call(firstRow, field),
+            示例值: (firstRow as Record<string, any>)[field]
+          }))
+        })
+
         resolve(jsonData)
       } catch (error) {
         console.error('Excel解析错误:', error)
