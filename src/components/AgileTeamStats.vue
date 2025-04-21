@@ -419,10 +419,10 @@ const createMetricCharts = () => {
   })
 
   const statusColors = {
-    '良好规范': '#91cc75',
-    '较为规范': '#fac858',
-    '不太规范': '#ee6666',
-    '有待健全': '#73c0de',
+    '良好规范': '#4472c4',  // 图片中的蓝色
+    '较为规范': '#70ad47',  // 图片中的绿色
+    '不太规范': '#ffc000',  // 图片中的黄色
+    '有待健全': '#ed7d31',  // 图片中的橙红色
     '未知': '#909399'
   }
 
@@ -468,7 +468,10 @@ const createMetricCharts = () => {
           },
           tooltip: {
             trigger: 'item',
-            formatter: '{b}: {c} ({d}%)'
+            formatter: function(params: any) {
+              // 将百分比取整
+              return `${params.name}: ${Math.round(params.percent)}%`
+            }
           },
           legend: {
             orient: 'horizontal',
@@ -490,7 +493,10 @@ const createMetricCharts = () => {
               },
               label: {
                 show: true,
-                formatter: '{b}: {c}'
+                formatter: function(params: any) {
+                  // 将百分比取整
+                  return `${params.name}: ${Math.round(params.percent)}%`
+                }
               }
             }
           ]
@@ -586,10 +592,10 @@ const readExcelFile = async (file: File): Promise<any[]> => {
 
 function getStatusColor(status: string): string {
   const colorMap: { [key: string]: string } = {
-    '良好规范': 'success',
-    '较为规范': 'warning',
-    '不太规范': 'error',
-    '有待健全': 'info',
+    '良好规范': 'primary',   // 蓝色
+    '较为规范': 'success',   // 绿色
+    '不太规范': 'warning',   // 黄色
+    '有待健全': 'error',     // 橙红色
     '未知': 'grey'
   }
   return colorMap[status] || 'grey'
@@ -626,7 +632,7 @@ const getMetricStats = (activity: string, period: string, type: '过程完成度
   
   const max = Math.max(...values)
   const min = Math.min(...values)
-  const avg = Math.round(values.reduce((a, b) => a + b, 0) / values.length)
+  const avg = Math.floor(values.reduce((a, b) => a + b, 0) / values.length)  // 向下取整
   
   return { max, min, avg }
 }
