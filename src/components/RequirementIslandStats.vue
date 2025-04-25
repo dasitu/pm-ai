@@ -149,6 +149,91 @@
                   <div class="text-center pa-4">暂无数据</div>
                 </v-expansion-panel-text>
               </v-expansion-panel>
+
+              <!-- 新增P1需求统计 -->
+              <v-expansion-panel>
+                <v-expansion-panel-title>
+                  <div class="d-flex align-center">
+                    <span class="text-h6">新增{{ p1NewCount }}个处于产品审核的P1需求</span>
+                  </div>
+                </v-expansion-panel-title>
+                <v-expansion-panel-text v-if="p1NewRequirements.length > 0">
+                  <v-data-table
+                    :headers="newP1TableHeaders"
+                    :items="p1NewRequirements"
+                    density="compact"
+                  >
+                    <template v-slot:item.流程节点="{ item }">
+                      <v-chip
+                        :color="getStatusColor(item.流程节点)"
+                        size="small"
+                        class="status-chip"
+                      >
+                        {{ item.流程节点 }}
+                      </v-chip>
+                    </template>
+                  </v-data-table>
+                </v-expansion-panel-text>
+                <v-expansion-panel-text v-else>
+                  <div class="text-center pa-4">暂无数据</div>
+                </v-expansion-panel-text>
+              </v-expansion-panel>
+
+              <!-- 同时降级和入池的P1需求统计 -->
+              <v-expansion-panel>
+                <v-expansion-panel-title>
+                  <div class="d-flex align-center">
+                    <span class="text-h6">共计{{ p1DowngradedAndPooledCount }}个需求同时降级和入池</span>
+                  </div>
+                </v-expansion-panel-title>
+                <v-expansion-panel-text v-if="p1DowngradedAndPooledRequirements.length > 0">
+                  <v-data-table
+                    :headers="downgradedAndPooledTableHeaders"
+                    :items="p1DowngradedAndPooledRequirements"
+                    density="compact"
+                  >
+                    <template v-slot:item.原业务优先级="{ item }">
+                      <v-chip
+                        color="primary"
+                        size="small"
+                        class="status-chip"
+                      >
+                        {{ item.原业务优先级 }}
+                      </v-chip>
+                    </template>
+                    <template v-slot:item.新业务优先级="{ item }">
+                      <v-chip
+                        color="warning"
+                        size="small"
+                        class="status-chip"
+                      >
+                        {{ item.新业务优先级 }}
+                      </v-chip>
+                    </template>
+                    <template v-slot:item.原流程节点="{ item }">
+                      <v-chip
+                        :color="getStatusColor(item.原流程节点)"
+                        size="small"
+                        class="status-chip"
+                      >
+                        {{ item.原流程节点 }}
+                      </v-chip>
+                    </template>
+                    <template v-slot:item.新流程节点="{ item }">
+                      <v-chip
+                        :color="getStatusColor(item.新流程节点)"
+                        size="small"
+                        class="status-chip"
+                      >
+                        {{ item.新流程节点 }}
+                      </v-chip>
+                    </template>
+                  </v-data-table>
+                </v-expansion-panel-text>
+                <v-expansion-panel-text v-else>
+                  <div class="text-center pa-4">暂无数据</div>
+                </v-expansion-panel-text>
+              </v-expansion-panel>
             </v-expansion-panels>
           </v-col>
         </v-row>
@@ -193,11 +278,15 @@ const currentStep = ref('')
 const p1PooledCount = ref(0)
 const p1RejectedCount = ref(0)
 const p1DowngradedCount = ref(0)
+const p1NewCount = ref(0)  // 新增P1需求数量
+const p1DowngradedAndPooledCount = ref(0)  // 同时降级和入池的P1需求数量
 
 // 详细数据
 const p1PooledRequirements = ref<any[]>([])
 const p1RejectedRequirements = ref<any[]>([])
 const p1DowngradedRequirements = ref<any[]>([])
+const p1NewRequirements = ref<any[]>([])  // 新增P1需求列表
+const p1DowngradedAndPooledRequirements = ref<any[]>([])  // 同时降级和入池的P1需求列表
 
 const tableHeaders = [
   { title: '变更类型', key: 'changeType', align: 'start' as const },
@@ -251,8 +340,55 @@ const downgradedTableHeaders = computed(() => [
       { title: previousMonthName.value, key: '原业务优先级' },
       { title: currentMonthName.value, key: '新业务优先级' }
     ]
+  },
+  { 
+    title: '流程节点变化',
+    key: '流程节点',
+    children: [
+      { title: previousMonthName.value, key: '原流程节点' },
+      { title: currentMonthName.value, key: '新流程节点' }
+    ]
   }
 ])
+
+const newP1TableHeaders = [
+  { title: '需求收集标题', key: '需求收集标题' },
+  { title: '业务优先级', key: '业务优先级' },
+  { title: '产品优先级', key: '产品优先级' },
+  { title: '投递产品线路径', key: '投递产品线路径' },
+  { title: '入池产品线路径', key: '入池产品线路径' },
+  { title: '提报人', key: '提报人' },
+  { title: '提报部门', key: '提报部门' },
+  { title: '提报时间', key: '提报时间' },
+  { title: '流程节点', key: '流程节点' },
+  { title: '当前处理人', key: '当前处理人' }
+]
+
+const downgradedAndPooledTableHeaders = [
+  { title: '需求收集标题', key: '需求收集标题' },
+  { title: '产品优先级', key: '产品优先级' },
+  { title: '投递产品线路径', key: '投递产品线路径' },
+  { title: '入池产品线路径', key: '入池产品线路径' },
+  { title: '提报人', key: '提报人' },
+  { title: '提报部门', key: '提报部门' },
+  { title: '提报时间', key: '提报时间' },
+  { 
+    title: '业务优先级变化',
+    key: '业务优先级',
+    children: [
+      { title: previousMonthName.value, key: '原业务优先级' },
+      { title: currentMonthName.value, key: '新业务优先级' }
+    ]
+  },
+  { 
+    title: '流程节点变化',
+    key: '流程节点',
+    children: [
+      { title: previousMonthName.value, key: '原流程节点' },
+      { title: currentMonthName.value, key: '新流程节点' }
+    ]
+  }
+]
 
 const compareAndProcessData = (data: any[]) => {
   if (data.length !== 2) {
@@ -403,15 +539,66 @@ const compareAndProcessData = (data: any[]) => {
       }
     })
 
+  // 4. 统计新增的P1需求且处于产品审核状态
+  p1NewRequirements.value = currentMonth.filter((currReq: Requirement) => {
+    const isP1 = currReq['业务优先级']?.toString().trim() === 'P1'
+    const isProductReview = currReq['流程节点']?.toString().trim() === '产品审核'
+    
+    // 检查是否在上个月不存在
+    const existsInPreviousMonth = previousMonth.some((prevReq: Requirement) => 
+      prevReq['需求收集标题']?.toString().trim() === currReq['需求收集标题']?.toString().trim() && 
+      prevReq['提报时间']?.toString().trim() === currReq['提报时间']?.toString().trim()
+    )
+    
+    return isP1 && isProductReview && !existsInPreviousMonth
+  })
+
+  // 5. 统计同时降级和入池的P1需求
+  p1DowngradedAndPooledRequirements.value = p1RequirementsInPreviousMonth
+    .filter((prevReq: Requirement) => {
+      const currentReq = currentMonth.find((currReq: Requirement) => 
+        currReq['需求收集标题']?.toString().trim() === prevReq['需求收集标题']?.toString().trim() && 
+        currReq['提报时间']?.toString().trim() === prevReq['提报时间']?.toString().trim()
+      )
+      
+      if (!currentReq) {
+        return false
+      }
+      
+      const currentPriority = currentReq['业务优先级']?.toString().trim()
+      const isDowngraded = currentPriority === 'P2' || currentPriority === 'P3'
+      const wasNotPooled = prevReq['流程节点']?.toString().trim() !== '入需求池'
+      const isNowPooled = currentReq['流程节点']?.toString().trim() === '入需求池'
+      
+      return isDowngraded && wasNotPooled && isNowPooled
+    })
+    .map((prevReq: Requirement) => {
+      const currentReq = currentMonth.find((currReq: Requirement) => 
+        currReq['需求收集标题']?.toString().trim() === prevReq['需求收集标题']?.toString().trim() && 
+        currReq['提报时间']?.toString().trim() === prevReq['提报时间']?.toString().trim()
+      )
+      return {
+        ...prevReq,
+        '原业务优先级': 'P1',
+        '新业务优先级': currentReq ? currentReq['业务优先级']?.toString().trim() : '',
+        '原流程节点': prevReq['流程节点']?.toString().trim(),
+        '新流程节点': currentReq ? currentReq['流程节点']?.toString().trim() : ''
+      }
+    })
+
   // 更新统计数据
   p1PooledCount.value = p1PooledRequirements.value.length
   p1RejectedCount.value = p1RejectedRequirements.value.length
   p1DowngradedCount.value = p1DowngradedRequirements.value.length
+  p1NewCount.value = p1NewRequirements.value.length
+  p1DowngradedAndPooledCount.value = p1DowngradedAndPooledRequirements.value.length
 
   console.log('最终统计结果', {
     入池数量: p1PooledCount.value,
     拒绝数量: p1RejectedCount.value,
-    降级数量: p1DowngradedCount.value
+    降级数量: p1DowngradedCount.value,
+    新增P1数量: p1NewCount.value,
+    同时降级和入池数量: p1DowngradedAndPooledCount.value
   })
 
   currentStep.value = '统计完成'
