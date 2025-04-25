@@ -295,17 +295,17 @@ const compareAndProcessData = (data: any[]) => {
 
   // 1. 统计P1需求入池
   p1PooledRequirements.value = currentMonth.filter((req: Requirement) => {
-    const isP1 = req['业务优先级'] === 'P1'
-    const isPooled = req['流程节点'] === '入需求池'
+    const isP1 = req['业务优先级']?.toString().trim() === 'P1'
+    const isPooled = req['流程节点']?.toString().trim() === '入需求池'
     
     // 查找上个月的数据
     const previousReq = previousMonth.find((prevReq: Requirement) => 
-      prevReq['需求收集标题'] === req['需求收集标题'] && 
-      prevReq['提报时间'] === req['提报时间']
+      prevReq['需求收集标题']?.toString().trim() === req['需求收集标题']?.toString().trim() && 
+      prevReq['提报时间']?.toString().trim() === req['提报时间']?.toString().trim()
     )
     
     // 检查是否从其他状态变为入池
-    const wasNotPooled = previousReq && previousReq['流程节点'] !== '入需求池'
+    const wasNotPooled = previousReq && previousReq['流程节点']?.toString().trim() !== '入需求池'
     
     if (isP1 && isPooled && wasNotPooled) {
       console.log('找到P1需求入池', {
@@ -319,13 +319,13 @@ const compareAndProcessData = (data: any[]) => {
     return isP1 && isPooled && wasNotPooled
   }).map((req: Requirement) => {
     const previousReq = previousMonth.find((prevReq: Requirement) => 
-      prevReq['需求收集标题'] === req['需求收集标题'] && 
-      prevReq['提报时间'] === req['提报时间']
+      prevReq['需求收集标题']?.toString().trim() === req['需求收集标题']?.toString().trim() && 
+      prevReq['提报时间']?.toString().trim() === req['提报时间']?.toString().trim()
     )
     return {
       ...req,
-      '原流程节点': previousReq ? previousReq['流程节点'] : '',
-      '新流程节点': req['流程节点'],
+      '原流程节点': previousReq ? previousReq['流程节点']?.toString().trim() : '',
+      '新流程节点': req['流程节点']?.toString().trim(),
       changeType: 'P1需求入池'
     }
   })
@@ -339,12 +339,12 @@ const compareAndProcessData = (data: any[]) => {
 
   // 2. 统计P1需求拒绝
   p1RejectedRequirements.value = previousMonth.filter((prevReq: Requirement) => {
-    const isP1 = prevReq['业务优先级'] === 'P1'
+    const isP1 = prevReq['业务优先级']?.toString().trim() === 'P1'
     
     // 检查本月是否还存在这个需求
     const existsInCurrentMonth = currentMonth.some((currReq: Requirement) => 
-      currReq['需求收集标题'] === prevReq['需求收集标题'] && 
-      currReq['提报时间'] === prevReq['提报时间']
+      currReq['需求收集标题']?.toString().trim() === prevReq['需求收集标题']?.toString().trim() && 
+      currReq['提报时间']?.toString().trim() === prevReq['提报时间']?.toString().trim()
     )
     
     if (isP1 && !existsInCurrentMonth) {
@@ -358,7 +358,7 @@ const compareAndProcessData = (data: any[]) => {
     return isP1 && !existsInCurrentMonth
   }).map((req: Requirement) => ({
     ...req,
-    '原流程节点': req['流程节点'],
+    '原流程节点': req['流程节点']?.toString().trim(),
     '新流程节点': '已拒绝',
     changeType: 'P1需求拒绝'
   }))
@@ -371,45 +371,35 @@ const compareAndProcessData = (data: any[]) => {
   })
 
   // 3. 统计P1需求降级
-  // 先筛选出前一个月（3月）的P1需求
-  const p1RequirementsInPreviousMonth = previousMonth.filter((prevReq: Requirement) => prevReq['业务优先级'] === 'P1')
-  console.log('找到前一个月的P1需求数量:', p1RequirementsInPreviousMonth.length)
+  const p1RequirementsInPreviousMonth = previousMonth.filter((prevReq: Requirement) => 
+    prevReq['业务优先级']?.toString().trim() === 'P1'
+  )
 
   p1DowngradedRequirements.value = p1RequirementsInPreviousMonth
     .filter((prevReq: Requirement) => {
       const currentReq = currentMonth.find((currReq: Requirement) => 
-        currReq['需求收集标题'] === prevReq['需求收集标题'] && 
-        currReq['提报时间'] === prevReq['提报时间']
+        currReq['需求收集标题']?.toString().trim() === prevReq['需求收集标题']?.toString().trim() && 
+        currReq['提报时间']?.toString().trim() === prevReq['提报时间']?.toString().trim()
       )
       
       if (!currentReq) {
-        console.log('需求在本月未找到:', prevReq['需求收集标题'])
         return false
       }
       
-      const currentPriority = currentReq['业务优先级'] as 'P1' | 'P2' | 'P3'
+      const currentPriority = currentReq['业务优先级']?.toString().trim()
       const isDowngraded = currentPriority === 'P2' || currentPriority === 'P3'
-      
-      if (isDowngraded) {
-        console.log('找到P1需求降级', {
-          标题: prevReq['需求收集标题'],
-          提报时间: prevReq['提报时间'],
-          原优先级: 'P1',
-          新优先级: currentReq['业务优先级']
-        })
-      }
       
       return isDowngraded
     })
     .map((prevReq: Requirement) => {
       const currentReq = currentMonth.find((currReq: Requirement) => 
-        currReq['需求收集标题'] === prevReq['需求收集标题'] && 
-        currReq['提报时间'] === prevReq['提报时间']
+        currReq['需求收集标题']?.toString().trim() === prevReq['需求收集标题']?.toString().trim() && 
+        currReq['提报时间']?.toString().trim() === prevReq['提报时间']?.toString().trim()
       )
       return {
         ...prevReq,
         '原业务优先级': 'P1',
-        '新业务优先级': currentReq ? currentReq['业务优先级'] : ''
+        '新业务优先级': currentReq ? currentReq['业务优先级']?.toString().trim() : ''
       }
     })
 
@@ -494,9 +484,22 @@ const readExcelFile = (file: File) => {
         const workbook = XLSX.read(data, { type: 'array' })
         const firstSheetName = workbook.SheetNames[0]
         const worksheet = workbook.Sheets[firstSheetName]
-        const jsonData = XLSX.utils.sheet_to_json(worksheet)
+        
+        // 正确获取表头信息
+        const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1')
+        const headers = []
+        for (let col = range.s.c; col <= range.e.c; col++) {
+          const cellAddress = XLSX.utils.encode_cell({ r: 0, c: col }) // 第一行是表头
+          const cell = worksheet[cellAddress]
+          if (cell && cell.v) {
+            headers.push(String(cell.v).trim())
+          }
+        }
 
-        // 验证必需字段是否存在
+        // 从第二行开始获取数据
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: headers, range: 1 })
+
+        // 验证必需字段是否存在于表头中
         const requiredFields = [
           '需求收集标题',
           '业务优先级',
@@ -510,22 +513,66 @@ const readExcelFile = (file: File) => {
           '已入池收集周期（天）'
         ]
 
+        // 规范化处理函数
+        const normalizeField = (field: string) => {
+          return field.trim().replace(/\u200B/g, '').replace(/\uFEFF/g, '')
+        }
+
+        // 规范化处理后的表头
+        const normalizedHeaders = headers.map(normalizeField)
+
+        // 只检查表头是否包含必需字段（使用规范化后的比较）
+        const missingRequiredFields = requiredFields.filter(field => {
+          const normalizedField = normalizeField(field)
+          return !normalizedHeaders.some(header => header === normalizedField)
+        })
+        
+        // 添加详细的调试日志
+        console.log(`===== 开始检查文件: ${file.name} =====`)
+        console.log(`文件 ${file.name} 的原始表头:`, headers)
+        console.log(`文件 ${file.name} 的规范化表头:`, normalizedHeaders)
+        console.log('所有必需字段:', requiredFields)
+        
+        // 检查每个必需字段在表头中是否存在
+        console.log(`文件 ${file.name} 的字段检查结果:`)
+        requiredFields.forEach(field => {
+          const normalizedField = normalizeField(field)
+          const found = normalizedHeaders.some(header => header === normalizedField)
+          console.log(`检查字段 "${field}":`, {
+            文件名: file.name,
+            存在: found,
+            原始字段: field,
+            规范化后: normalizedField
+          })
+        })
+        
+        // 检查表头中是否存在相似但不完全匹配的字段
+        console.log(`文件 ${file.name} 的相似字段匹配:`)
+        requiredFields.forEach(required => {
+          const normalizedRequired = normalizeField(required)
+          const similarFields = normalizedHeaders.filter(header => 
+            header !== normalizedRequired && 
+            (header.includes(normalizedRequired) || normalizedRequired.includes(header))
+          )
+          if (similarFields.length > 0) {
+            console.log(`必需字段 "${required}" 的相似字段:`, similarFields)
+          }
+        })
+        
+        if (missingRequiredFields.length > 0) {
+          console.error(`文件 ${file.name} 缺少必需字段:`, missingRequiredFields)
+          throw new Error(`文件 ${file.name} 缺少必需字段: ${missingRequiredFields.join(', ')}`)
+        }
+
+        // 检查可选字段是否存在，如果不存在则添加空值
         const optionalFields = [
           '当前处理人',
           '未入池停留时长（天）'
         ]
-
-        const firstRow = jsonData[0] || {}
-        const missingRequiredFields = requiredFields.filter(field => !Object.prototype.hasOwnProperty.call(firstRow, field))
         
-        if (missingRequiredFields.length > 0) {
-          console.error('缺少必需字段:', missingRequiredFields)
-          throw new Error(`文件缺少必需字段: ${missingRequiredFields.join(', ')}`)
-        }
-
-        // 检查可选字段是否存在，如果不存在则添加空值
         optionalFields.forEach(field => {
-          if (!Object.prototype.hasOwnProperty.call(firstRow, field)) {
+          const normalizedField = normalizeField(field)
+          if (!normalizedHeaders.includes(normalizedField)) {
             jsonData.forEach((row: unknown) => {
               if (row && typeof row === 'object') {
                 (row as Record<string, any>)[field] = ''
@@ -537,14 +584,16 @@ const readExcelFile = (file: File) => {
         // 添加更详细的日志输出
         console.log('Excel文件解析结果', {
           文件名: file.name,
-          表头: Object.keys(jsonData[0] || {}),
+          表头: headers,
+          规范化表头: normalizedHeaders,
+          数据行数: jsonData.length,
           前3行数据: jsonData.slice(0, 3),
           可选字段处理: optionalFields.map(field => ({
             字段名: field,
-            是否存在: Object.prototype.hasOwnProperty.call(firstRow, field),
-            示例值: (firstRow as Record<string, any>)[field]
+            是否存在: normalizedHeaders.includes(normalizeField(field))
           }))
         })
+        console.log(`===== 文件 ${file.name} 检查完成 =====\n`)
 
         resolve(jsonData)
       } catch (error) {
